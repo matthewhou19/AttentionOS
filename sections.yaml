@@ -1,0 +1,84 @@
+sections:
+- name: AI Agents
+  icon: 🤖
+  color: '#6366f1'
+  match:
+  - ai agents
+  - autonomous
+  - agentic
+  - personal agents
+  - multi-agent
+  - agent
+  visible: true
+- name: AI/ML Engineering
+  icon: ⚡
+  color: '#8b5cf6'
+  match:
+  - llm
+  - transformer
+  - fine-tuning
+  - rag
+  - embeddings
+  - ai/ml
+  - machine learning
+  - model
+  - code generation
+  - reasoning
+  visible: true
+- name: AI Industry
+  icon: 🏢
+  color: '#0ea5e9'
+  match:
+  - ai industry
+  - openai
+  - anthropic
+  - google
+  - ai safety
+  - chatgpt
+  - global adoption
+  - ai impact
+  - ai ethics
+  visible: true
+- name: Developer Tools
+  icon: 🛠
+  color: '#22c55e'
+  match:
+  - developer tools
+  - cli
+  - ide
+  - devtools
+  - sdk
+  - infrastructure
+  - web development
+  - css
+  - database
+  visible: true
+- name: Open Source
+  icon: 📦
+  color: '#f97316'
+  match:
+  - open source
+  - github
+  - foss
+  - community
+  visible: true
+- name: Startups
+  icon: 🚀
+  color: '#ec4899'
+  match:
+  - startups
+  - funding
+  - launch
+  - startup
+  visible: true
+- name: Developer Life
+  icon: 💭
+  color: '#14b8a6'
+  match:
+  - developer experience
+  - productivity
+  - career
+  - cognitive load
+  - burnout
+  - software engineering
+  visible: true

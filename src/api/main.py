@@ -1,10 +1,12 @@
 from pathlib import Path
 
+import yaml
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from src.api.routers import articles, feeds, scores
+from src.config import SECTIONS_PATH
 from src.db.session import init_db
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -24,6 +26,32 @@ def dashboard():
 @app.on_event("startup")
 def startup():
     init_db()
+
+
+@app.get("/api/sections")
+def get_sections():
+    if not SECTIONS_PATH.exists():
+        return []
+    data = yaml.safe_load(SECTIONS_PATH.read_text(encoding="utf-8"))
+    return data.get("sections", [])
+
+
+class SectionItem(BaseModel):
+    name: str
+    icon: str
+    color: str
+    match: list[str]
+    visible: bool = True
+
+
+@app.put("/api/sections")
+def put_sections(items: list[SectionItem]):
+    data = {"sections": [s.model_dump() for s in items]}
+    SECTIONS_PATH.write_text(
+        yaml.dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    return {"ok": True, "count": len(items)}
 
 
 @app.get("/api/stats")

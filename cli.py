@@ -128,6 +128,108 @@ def score_write_file(filepath):
         raise SystemExit(1)
 
 
+# --- Sections ---
+
+@cli.group()
+def sections():
+    """Manage dashboard sections (topic columns)."""
+    pass
+
+
+def _load_sections():
+    import yaml
+    from src.config import SECTIONS_PATH
+    if not SECTIONS_PATH.exists():
+        return []
+    data = yaml.safe_load(SECTIONS_PATH.read_text(encoding="utf-8"))
+    return data.get("sections", [])
+
+
+def _save_sections(sections_list):
+    import yaml
+    from src.config import SECTIONS_PATH
+    SECTIONS_PATH.write_text(
+        yaml.dump({"sections": sections_list}, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+
+def _echo_utf8(text):
+    import sys
+    sys.stdout.buffer.write(text.encode("utf-8"))
+    sys.stdout.buffer.write(b"\n")
+
+
+@sections.command("list")
+def sections_list():
+    """List all dashboard sections."""
+    secs = _load_sections()
+    if not secs:
+        click.echo("No sections defined. Add one with: python cli.py sections add <name>")
+        return
+    for i, s in enumerate(secs):
+        vis = "visible" if s.get("visible", True) else "hidden"
+        kw = ", ".join(s.get("match", []))
+        _echo_utf8(f"  {i+1}. {s['icon']} {s['name']} ({s['color']}) [{vis}]")
+        _echo_utf8(f"     Keywords: {kw}")
+
+
+@sections.command("add")
+@click.argument("name")
+@click.option("--icon", default="\U0001F4C4", help="Emoji icon")
+@click.option("--color", default="#71717a", help="Hex color")
+@click.option("--match", "match_str", default="", help="Comma-separated keywords")
+def sections_add(name, icon, color, match_str):
+    """Add a new dashboard section."""
+    secs = _load_sections()
+    if any(s["name"] == name for s in secs):
+        click.echo(f"Section '{name}' already exists", err=True)
+        raise SystemExit(1)
+    keywords = [k.strip() for k in match_str.split(",") if k.strip()] if match_str else []
+    secs.append({"name": name, "icon": icon, "color": color, "match": keywords, "visible": True})
+    _save_sections(secs)
+    _echo_utf8(f"Added section: {icon} {name}")
+
+
+@sections.command("remove")
+@click.argument("name")
+def sections_remove(name):
+    """Remove a dashboard section by name."""
+    secs = _load_sections()
+    before = len(secs)
+    secs = [s for s in secs if s["name"] != name]
+    if len(secs) == before:
+        click.echo(f"Section '{name}' not found", err=True)
+        raise SystemExit(1)
+    _save_sections(secs)
+    click.echo(f"Removed section: {name}")
+
+
+@sections.command("update")
+@click.argument("name")
+@click.option("--icon", default=None, help="New emoji icon")
+@click.option("--color", default=None, help="New hex color")
+@click.option("--match", "match_str", default=None, help="New comma-separated keywords (replaces existing)")
+@click.option("--visible/--hidden", default=None, help="Show or hide this section")
+def sections_update(name, icon, color, match_str, visible):
+    """Update properties of an existing section."""
+    secs = _load_sections()
+    target = next((s for s in secs if s["name"] == name), None)
+    if not target:
+        click.echo(f"Section '{name}' not found", err=True)
+        raise SystemExit(1)
+    if icon is not None:
+        target["icon"] = icon
+    if color is not None:
+        target["color"] = color
+    if match_str is not None:
+        target["match"] = [k.strip() for k in match_str.split(",") if k.strip()]
+    if visible is not None:
+        target["visible"] = visible
+    _save_sections(secs)
+    _echo_utf8(f"Updated section: {target['icon']} {name}")
+
+
 # --- Export ---
 
 @cli.group()

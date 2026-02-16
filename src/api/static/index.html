@@ -298,21 +298,19 @@
 <script>
 const API = '/api';
 
-const TOPIC_DEFS = [
-  { name: 'AI Agents',         icon: '\u{1F916}', color: '#6366f1', match: ['ai agents', 'autonomous', 'agentic', 'personal agents', 'multi-agent', 'agent'] },
-  { name: 'AI/ML Engineering', icon: '\u26A1',     color: '#8b5cf6', match: ['llm', 'transformer', 'fine-tuning', 'rag', 'embeddings', 'ai/ml', 'machine learning', 'model', 'code generation', 'reasoning'] },
-  { name: 'AI Industry',       icon: '\u{1F3E2}', color: '#0ea5e9', match: ['ai industry', 'openai', 'anthropic', 'google', 'ai safety', 'chatgpt', 'global adoption', 'ai impact', 'ai ethics'] },
-  { name: 'Developer Tools',   icon: '\u{1F6E0}', color: '#22c55e', match: ['developer tools', 'cli', 'ide', 'devtools', 'sdk', 'infrastructure', 'web development', 'css', 'database'] },
-  { name: 'Open Source',       icon: '\u{1F4E6}', color: '#f97316', match: ['open source', 'github', 'foss', 'community'] },
-  { name: 'Startups',          icon: '\u{1F680}', color: '#ec4899', match: ['startups', 'funding', 'launch', 'startup'] },
-  { name: 'Developer Life',    icon: '\u{1F4AD}', color: '#14b8a6', match: ['developer experience', 'productivity', 'career', 'cognitive load', 'burnout', 'software engineering'] },
-];
+let TOPIC_DEFS = [];
+
+async function loadSections() {
+  const res = await fetch(`${API}/sections`);
+  TOPIC_DEFS = await res.json();
+}
 
 function classifyArticle(article) {
   if (!article.score || !article.score.topics) return 'Other';
   const tags = article.score.topics.map(t => t.toLowerCase());
   const reason = (article.score.reason || '').toLowerCase();
   for (const def of TOPIC_DEFS) {
+    if (!def.visible) continue;
     for (const kw of def.match) {
       if (tags.some(t => t.includes(kw)) || reason.includes(kw)) return def.name;
     }
@@ -463,9 +461,11 @@ async function sendFeedback(articleId, action, btn) {
   loadStats();
 }
 
-loadStats();
-loadFeeds();
-loadArticles();
+loadSections().then(() => {
+  loadStats();
+  loadFeeds();
+  loadArticles();
+});
 </script>
 </body>
 </html>
