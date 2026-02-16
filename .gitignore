@@ -19,6 +19,9 @@ venv/
 .vscode/
 .idea/
 
+# Claude Code (keep commands/, ignore settings)
+.claude/settings.local.json
+
 # OS
 Thumbs.db
 .DS_Store
