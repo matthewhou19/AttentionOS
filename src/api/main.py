@@ -1,3 +1,5 @@
+import json
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -70,3 +72,105 @@ def get_stats():
         }
     finally:
         session.close()
+
+
+@app.post("/api/fetch")
+def api_fetch():
+    """Fetch new articles from all feeds, then auto-score with Claude CLI."""
+    from src.feeds.fetcher import fetch_all
+    from src.scoring.preparer import prepare_scoring_prompt, write_scores
+
+    # 1. Fetch
+    results = fetch_all()
+    total = sum(c for c in results.values() if c >= 0)
+
+    # 2. Auto-score unscored articles
+    scored = 0
+    score_error = None
+    batch = prepare_scoring_prompt(limit=30)
+    batch_data = json.loads(batch)
+
+    if batch_data.get("status") != "no_unscored_articles":
+        prompt = (
+            "You are scoring articles for AttentionOS. "
+            "Given the user interests and articles below, score each article.\n\n"
+            f"{batch}\n\n"
+            "Return ONLY a valid JSON array. No markdown fences, no extra text. "
+            'Each element: {"article_id": <id>, "relevance": <0-10>, '
+            '"significance": <0-10>, "summary": "<1-2 sentences>", '
+            '"topics": ["tag1"], "reason": "<why>"}'
+        )
+        try:
+            result = subprocess.run(
+                ["claude", "-p"],
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=180,
+                encoding="utf-8",
+            )
+            if result.returncode == 0:
+                output = result.stdout.strip()
+                start = output.find("[")
+                end = output.rfind("]") + 1
+                if start != -1 and end > 0:
+                    scored = write_scores(output[start:end])
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+            score_error = str(e)
+
+    return {
+        "results": results,
+        "total_new": total,
+        "scored": scored,
+        "score_error": score_error,
+    }
+
+
+@app.post("/api/score")
+def api_score(limit: int = 20):
+    from src.scoring.preparer import prepare_scoring_prompt, write_scores
+
+    batch = prepare_scoring_prompt(limit=limit)
+    batch_data = json.loads(batch)
+
+    if batch_data.get("status") == "no_unscored_articles":
+        return {"status": "no_unscored", "scored": 0}
+
+    prompt = (
+        "You are scoring articles for AttentionOS. "
+        "Given the user interests and articles below, score each article.\n\n"
+        f"{batch}\n\n"
+        "Return ONLY a valid JSON array. No markdown fences, no extra text. "
+        'Each element: {"article_id": <id>, "relevance": <0-10>, '
+        '"significance": <0-10>, "summary": "<1-2 sentences>", '
+        '"topics": ["tag1"], "reason": "<why>"}'
+    )
+
+    try:
+        result = subprocess.run(
+            ["claude", "-p"],
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            encoding="utf-8",
+        )
+    except FileNotFoundError:
+        return {"status": "error", "error": "Claude CLI not found in PATH"}
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": "Scoring timed out (180s)"}
+
+    if result.returncode != 0:
+        return {"status": "error", "error": result.stderr[:500]}
+
+    output = result.stdout.strip()
+    start = output.find("[")
+    end = output.rfind("]") + 1
+    if start == -1 or end == 0:
+        return {"status": "error", "error": "No JSON array in response"}
+
+    try:
+        count = write_scores(output[start:end])
+        return {"status": "ok", "scored": count}
+    except (json.JSONDecodeError, ValueError) as e:
+        return {"status": "error", "error": str(e)}

@@ -263,6 +263,66 @@
 
   .loading { text-align: center; padding: 40px; color: var(--text2); }
 
+  /* --- Action bar --- */
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .actions button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .actions button:hover { opacity: 0.9; }
+  .actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .actions input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    width: 260px;
+  }
+
+  .actions input::placeholder { color: var(--text2); }
+  .actions input:focus { outline: none; border-color: var(--accent); }
+
+  .actions .add-btn { background: var(--green); }
+  .actions .section-btn { background: var(--yellow); color: #1a1d27; }
+  .actions .divider { width: 1px; height: 20px; background: var(--border); }
+
+  .actions select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .actions select:focus { outline: none; border-color: var(--accent); }
+
+  #actionStatus {
+    font-size: 12px;
+    color: var(--text2);
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
   /* Empty column placeholder */
   .column.empty { opacity: 0.5; }
   .column.empty .column-body { display: flex; align-items: center; justify-content: center; }
@@ -291,6 +351,17 @@
   </div>
 </div>
 
+<div class="actions">
+  <button onclick="doFetch()" id="fetchBtn">Refresh</button>
+  <div class="divider"></div>
+  <input type="text" id="feedUrl" placeholder="RSS feed URL..." onkeydown="if(event.key==='Enter')doAddFeed()">
+  <select id="feedSection"></select>
+  <button class="add-btn" onclick="doAddFeed()">+ Add Feed</button>
+  <div class="divider"></div>
+  <button class="section-btn" onclick="doAddSection()">+ Section</button>
+  <span id="actionStatus"></span>
+</div>
+
 <div class="board" id="board">
   <div class="loading">Loading...</div>
 </div>
@@ -303,19 +374,20 @@ let TOPIC_DEFS = [];
 async function loadSections() {
   const res = await fetch(`${API}/sections`);
   TOPIC_DEFS = await res.json();
+  // Populate section picker for add-feed
+  const sel = document.getElementById('feedSection');
+  sel.innerHTML = '';
+  for (const s of TOPIC_DEFS) {
+    if (!s.visible) continue;
+    const opt = document.createElement('option');
+    opt.value = s.name;
+    opt.textContent = `${s.icon} ${s.name}`;
+    sel.appendChild(opt);
+  }
 }
 
 function classifyArticle(article) {
-  if (!article.score || !article.score.topics) return 'Other';
-  const tags = article.score.topics.map(t => t.toLowerCase());
-  const reason = (article.score.reason || '').toLowerCase();
-  for (const def of TOPIC_DEFS) {
-    if (!def.visible) continue;
-    for (const kw of def.match) {
-      if (tags.some(t => t.includes(kw)) || reason.includes(kw)) return def.name;
-    }
-  }
-  return 'Other';
+  return article.feed_category || 'Uncategorized';
 }
 
 function getTopicDef(name) {
@@ -459,6 +531,94 @@ async function sendFeedback(articleId, action, btn) {
   card.querySelectorAll('.feedback-btns button').forEach(b => { b.className = ''; });
   btn.className = `active-${action}`;
   loadStats();
+}
+
+function setStatus(msg) {
+  document.getElementById('actionStatus').textContent = msg;
+}
+
+async function doFetch() {
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true;
+  btn.textContent = 'Fetching...';
+  setStatus('Fetching & scoring (may take a minute)...');
+  try {
+    const res = await fetch(`${API}/fetch`, { method: 'POST' });
+    const data = await res.json();
+    let msg = `${data.total_new} new articles`;
+    if (data.scored > 0) msg += `, ${data.scored} scored`;
+    else if (data.total_new === 0) msg = 'No new articles';
+    if (data.score_error) msg += ' (score error)';
+    setStatus(msg);
+    loadStats();
+    loadArticles();
+  } catch (e) {
+    setStatus('Failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Refresh';
+  }
+}
+
+async function doAddFeed() {
+  const input = document.getElementById('feedUrl');
+  const url = input.value.trim();
+  if (!url) return;
+  const category = document.getElementById('feedSection').value;
+  setStatus('Adding feed...');
+  try {
+    const res = await fetch(`${API}/feeds`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, category })
+    });
+    if (res.ok) {
+      const feed = await res.json();
+      setStatus(`Added: ${feed.title || feed.url}`);
+      input.value = '';
+      const sel = document.getElementById('feedFilter');
+      const opt = document.createElement('option');
+      opt.value = feed.id;
+      opt.textContent = feed.title || feed.url;
+      sel.appendChild(opt);
+      loadStats();
+    } else {
+      const err = await res.json();
+      setStatus('Error: ' + (err.detail || 'Failed to add feed'));
+    }
+  } catch (e) {
+    setStatus('Add feed failed: ' + e.message);
+  }
+}
+
+async function doAddSection() {
+  const name = prompt('New section name:');
+  if (!name || !name.trim()) return;
+  const trimmed = name.trim();
+  // Check duplicate
+  if (TOPIC_DEFS.some(d => d.name.toLowerCase() === trimmed.toLowerCase())) {
+    setStatus('Section already exists');
+    return;
+  }
+  // Append new section and save
+  const newSection = { name: trimmed, icon: '\u{1F4C2}', color: '#71717a', match: [], visible: true };
+  const updated = [...TOPIC_DEFS, newSection];
+  try {
+    const res = await fetch(`${API}/sections`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated)
+    });
+    if (res.ok) {
+      setStatus(`Section added: ${trimmed}`);
+      await loadSections();
+      loadArticles();
+    } else {
+      setStatus('Failed to add section');
+    }
+  } catch (e) {
+    setStatus('Error: ' + e.message);
+  }
 }
 
 loadSections().then(() => {

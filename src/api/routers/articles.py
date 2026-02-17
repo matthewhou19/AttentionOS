@@ -23,6 +23,7 @@ class ArticleResponse(BaseModel):
     id: int
     feed_id: int
     feed_title: str
+    feed_category: str
     url: str
     title: str
     author: str
@@ -81,13 +82,16 @@ def list_articles(
                 )
 
             feed_title = ""
+            feed_category = ""
             if a.feed:
                 feed_title = a.feed.title or a.feed.url
+                feed_category = a.feed.category or ""
 
             result.append(ArticleResponse(
                 id=a.id,
                 feed_id=a.feed_id,
                 feed_title=feed_title,
+                feed_category=feed_category,
                 url=a.url,
                 title=a.title or "",
                 author=a.author or "",
@@ -122,13 +126,16 @@ def get_article(article_id: int):
             )
 
         feed_title = ""
+        feed_category = ""
         if a.feed:
             feed_title = a.feed.title or a.feed.url
+            feed_category = a.feed.category or ""
 
         return ArticleResponse(
             id=a.id,
             feed_id=a.feed_id,
             feed_title=feed_title,
+            feed_category=feed_category,
             url=a.url,
             title=a.title or "",
             author=a.author or "",
